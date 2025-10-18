@@ -1,45 +1,36 @@
-# Akuma.Dockerfile
-# Author: Martijn Lammers
 
-# Arguments.
+# Preferably we would like to use Alpine linux, and code-server officially 
+# supports it, however there are some issues by the npm installation, so 
+# we are using Ubuntu for now.
 
-ARG BASE_IMAGE=alpine:latest
-ARG USER=akuma
-ARG HOST=0.0.0.0
-ARG PORT=8080
-
-# As Akuma is a development environment template, we supply base image as an 
-# build argument. It defaults to alpine:latest as it is very lightweight
-# compared to conventional ubuntu.
-
-FROM ${BASE_IMAGE} AS setup 
+FROM ubuntu:24.04 AS base
 
 # Environment variables.
 
-ENV DIRECTORY_CODE_SERVER=/usr/local/bin/code-server
-ENV DIRECTORY_HOME=/home/${USER}
+ENV USER=akuma
+ENV DIRECTORY_AKUMA_HOME=/home/$USER/workspace
+ENV PORT=8080
 
-# Create a non-root user.
+# Add additional environment dependencies here. 
 
-RUN adduser -D ${USER}
+RUN apt-get -y update
+RUN apt-get -y install curl 
+RUN apt-get clean
 
-# Here we download the install script of code-server in a sensible linux 
-# directory. We run the script using bash, and afterwards clean up the 
-# temporary installation directory.
+# Install code-server.
 
-RUN mkdir -p ${DIRECTORY_CODE_SERVER}
-WORKDIR ${DIRECTORY_CODE_SERVER}
+RUN curl -fsSL https://code-server.dev/install.sh | sh
 
-RUN curl -fsSL https://code-server.dev/install.sh
-RUN bash install.sh
+# Create and switch to non-root user and go to workspace.
 
-WORKDIR ${DIRECTORY_HOME}
-RUN rm -rf ${DIRECTORY_CODE_SERVER}
+RUN useradd -ms /bin/bash $USER && \
+    mkdir -p $DIRECTORY_AKUMA_HOME && \
+    chown -R $USER:$USER $DIRECTORY_AKUMA_HOME
 
-# Switch to non-root user.
+USER $USER
+WORKDIR $DIRECTORY_AKUMA_HOME
 
-USER ${USER}
+# Run code-server on container start.
 
-# Expose the port code-server will run on, and start code-server.
-EXPOSE ${PORT}
-ENTRYPOINT ["/usr/bin/entrypoint.sh", "--bind-addr", "${HOST}:${PORT}", "."]
+EXPOSE $PORT
+CMD [ "sh", "-c", "code-server --bind-addr 0.0.0.0:\"$PORT\" --auth none \"$DIRECTORY_AKUMA_HOME\"" ]
